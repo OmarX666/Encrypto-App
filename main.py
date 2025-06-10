@@ -51,21 +51,21 @@ def files_prep():
             filemode='a',
             level=logging.INFO,
             datefmt='%Y-%m-%d %H:%M:%S',
-            format='%(asctime)s - %(levelname)s - %(message)s'
+            format='%(asctime)s - %(levelname)s- %(message)s'
         )
 
         logging.info("Files have been created.")
 
         return False
 
-def Getting_user_input(name = False, email = False, upassword = False):
+def Getting_user_input(username = False, Email = False, password = False):
     """
     Function to get user input for username, email, and password.
     This function is currently a placeholder and does not implement any functionality.
     """
     
     while True:
-        if not name: 
+        if not username: 
             break
 
         # Validate username format using regex
@@ -75,7 +75,7 @@ def Getting_user_input(name = False, email = False, upassword = False):
             print("Invalid username format. Please use 3-20 alphanumeric characters or underscores.")
 
     while True:
-        if not upassword:
+        if not password:
             break
 
         # Validate password length
@@ -85,7 +85,7 @@ def Getting_user_input(name = False, email = False, upassword = False):
             print("Password must be at least 8 characters long. Please try again.")
 
     while True:
-        if not email:
+        if not Email:
             break
 
         Email = input("Enter your email: ").strip()
@@ -177,12 +177,10 @@ def main():
 
     if not files_prep():
         print("Hello, welcome to Encrypto!")
-        username, Email, _ = Getting_user_input(name=True, email=True, upassword=False)
-        print(username, Email)
-
-        # while True:
-        #     if Sign_up(username, Email, password):
-        #         break
+        username, Email, password = Getting_user_input(True, True, True)
+        while True:
+            if Sign_up(username, Email, password):
+                break
     else:  
         pass
 
