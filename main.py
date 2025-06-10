@@ -58,6 +58,45 @@ def files_prep():
 
         return False
 
+def Getting_user_input(name = False, email = False, upassword = False):
+    """
+    Function to get user input for username, email, and password.
+    This function is currently a placeholder and does not implement any functionality.
+    """
+    
+    while True:
+        if not name: 
+            break
+
+        # Validate username format using regex
+        if len(username := input("Enter your username: ").strip()) >= 3 and len(username) <= 20:
+            break
+        else:
+            print("Invalid username format. Please use 3-20 alphanumeric characters or underscores.")
+
+    while True:
+        if not upassword:
+            break
+
+        # Validate password length
+        if len(password := input("Enter your password: ").strip()) >= 8:
+            break
+        else:
+            print("Password must be at least 8 characters long. Please try again.")
+
+    while True:
+        if not email:
+            break
+
+        Email = input("Enter your email: ").strip()
+        # Validate email format using regex
+        if re.match(r"[^@]+@[^@]+\.[^@]+", Email):
+            break
+        else:
+            print("Invalid email format. Please try again.")
+
+    return [username, Email, password]
+
 
 def check_user_in():
     pass
@@ -138,32 +177,12 @@ def main():
 
     if not files_prep():
         print("Hello, welcome to Encrypto!")
+        username, Email, _ = Getting_user_input(name=True, email=True, upassword=False)
+        print(username, Email)
 
-        while True:
-            # Validate username format using regex
-            if len(username := input("Enter your username: ").strip()) >= 3 and len(username) <= 20:
-                break
-            else:
-                print("Invalid username format. Please use 3-20 alphanumeric characters or underscores.")
-
-        while True:
-            # Validate password length
-            if len(password := input("Enter your password: ").strip()) >= 8:
-                break
-            else:
-                print("Password must be at least 8 characters long. Please try again.")
-
-        while True:
-            Email = input("Enter your email: ").strip()
-            # Validate email format using regex
-            if re.match(r"[^@]+@[^@]+\.[^@]+", Email):
-                break
-            else:
-                print("Invalid email format. Please try again.")
-
-        while True:
-            if Sign_up(username, Email, password):
-                break
+        # while True:
+        #     if Sign_up(username, Email, password):
+        #         break
     else:  
         pass
 
