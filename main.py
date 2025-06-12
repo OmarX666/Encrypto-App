@@ -71,7 +71,7 @@ def Getting_user_input(username = False, Email = False, password = False):
             break
         else:
             print("Invalid username format. Please use 3-20 alphanumeric characters or underscores.")
-
+ 
     while True:
         if not Email:
             break
