@@ -2,6 +2,11 @@ from datetime import datetime
 import sqlite3, re, os, json
 import logging, random
 
+ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Assets")
+USERS_DB = os.path.join(ASSETS_DIR, "users.db")
+CONFIG_JSON = os.path.join(ASSETS_DIR, "config.json")
+LOGS_LOG = os.path.join(ASSETS_DIR, "logs.log")
+
 # Check if All files exist, if not create them
 def files_prep():
     """
@@ -9,19 +14,13 @@ def files_prep():
     If a file does not exist, it will be created.
     """
     # Get the current script directory
-    current_script_dir = os.path.dirname(os.path.abspath(__file__))
-
-    if not os.path.exists(f"{current_script_dir}\Assets"):
-        os.makedirs(f"{current_script_dir}\Assets", exist_ok=True)
+    if not os.path.exists(ASSETS_DIR):
+        os.makedirs(ASSETS_DIR, exist_ok=True)
 
     # List of files to check 
-    files = [   
-        current_script_dir + r"\Assets\users.db", 
-        current_script_dir + r"\Assets\config.json",
-        current_script_dir + r"\Assets\logs.log"
-        ]
-    exist = [os.path.exists(file) for file in files]
-    if all(exist):
+    files = [USERS_DB, CONFIG_JSON, LOGS_LOG]
+
+    if all([os.path.exists(file) for file in files]):
         return True  # All files exist, no need to create them
     else:
         for file in files:
@@ -29,7 +28,7 @@ def files_prep():
                 f.close()  # Create an empty file
 
         # Connect to the SQLite database
-        conn = sqlite3.connect(current_script_dir + r"\Assets\users.db")
+        conn = sqlite3.connect(USERS_DB)
         cursor = conn.cursor()
 
         # Create the users table if it doesn't exist
@@ -45,7 +44,7 @@ def files_prep():
 
         # logging setup
         logging.basicConfig(
-            filename=f"{current_script_dir}\Assets\logs.log",
+            filename=LOGS_LOG,
             filemode='a',
             level=logging.INFO,
             datefmt='%Y-%m-%d %H:%M:%S',
@@ -53,7 +52,6 @@ def files_prep():
         )
 
         logging.info("Files have been created.")
-
         return False
 
 def Getting_user_input(username = False, Email = False, password = False):
@@ -71,7 +69,7 @@ def Getting_user_input(username = False, Email = False, password = False):
             break
         else:
             print("Invalid username format. Please use 3-20 alphanumeric characters or underscores.")
- 
+
     while True:
         if not Email:
             break
@@ -108,7 +106,7 @@ def Sign_in(username, password):
             bool: True if the user was found and signed in successfully, False otherwise.
 
     """
-    conn = sqlite3.connect(os.path.dirname(os.path.abspath(__file__)) + r"\Assets\users.db")
+    conn = sqlite3.connect(USERS_DB)
     cursor = conn.cursor()
     # Check if the user exists in the database
     cursor.execute(
@@ -120,7 +118,7 @@ def Sign_in(username, password):
     if User_values is not None:
 
         # add to config.json
-        with open(os.path.dirname(os.path.abspath(__file__)) + r"\Assets\config.json", 'w') as config_file:
+        with open(CONFIG_JSON, 'w') as config_file:
             json.dump({
                 "user_id": User_values[0],
                 "username": username,
@@ -152,8 +150,7 @@ def Sign_up(useNam, useEm, usePass):
     """
 
     # Connect to the SQLite database
-    current_script_dir = os.path.dirname(os.path.abspath(__file__))
-    conn = sqlite3.connect(current_script_dir + r"\Assets\users.db")
+    conn = sqlite3.connect(USERS_DB)
     cursor = conn.cursor()
     # Check if the user already exists
     cursor.execute(
@@ -186,13 +183,13 @@ def Sign_up(useNam, useEm, usePass):
 
         # Insert the new user into the database
         cursor.execute(
-            "INSERT INTO users VALUES (?, ?, ?, ?)", (random_id,useNam, useEm, usePass)
+            "INSERT INTO users VALUES (?, ?, ?, ?)", (random_id, useNam, useEm, usePass)
             )
         conn.commit()
         conn.close()
 
         # Add To UserInfo to config.json
-        with open(current_script_dir + r"\Assets\config.json", 'w') as config_file:
+        with open(CONFIG_JSON, 'w') as config_file:
             config_file.write(json.dumps(
                 {
                     "user_id": random_id,
@@ -220,10 +217,10 @@ def main():
             if Sign_up(username, Email, password):
                 break
     else:  
-        with open(os.path.dirname(os.path.abspath(__file__)) + r"\Assets\config.json", 'r') as config_file:
-            config_data = json.load(config_file )
+        with open(CONFIG_JSON, 'r') as config_file:
+            config_data = json.load(config_file)
 
-        conn = sqlite3.connect(os.path.dirname(os.path.abspath(__file__)) + r"\Assets\users.db")
+        conn = sqlite3.connect(USERS_DB)
         cursor = conn.cursor()
         cursor.execute(
             "SELECT * FROM users WHERE id = ? and username = ? and email = ? and password = ?", 
