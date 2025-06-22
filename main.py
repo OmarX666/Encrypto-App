@@ -1,14 +1,36 @@
+import os
+import logging
+import sqlite3
+import json
+import random
+import re
+# Encrypto - A simple file for encryption tools
+import crypt
 from datetime import datetime
-import sqlite3, re, os, json
-import logging, random
+import tkinter as tk
+from tkinter.filedialog import askdirectory, askopenfilename
 
-ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Assets")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSETS_DIR = os.path.join(BASE_DIR, "Assets")
 USERS_DB = os.path.join(ASSETS_DIR, "users.db")
 CONFIG_JSON = os.path.join(ASSETS_DIR, "config.json")
 LOGS_LOG = os.path.join(ASSETS_DIR, "logs.log")
 
+def get_db_connection():
+    conn = sqlite3.connect(USERS_DB)
+    cursor = conn.cursor()
+    return conn, cursor
+
+def load_config():
+    with open(CONFIG_JSON, 'r') as config_file:
+        return json.load(config_file)
+
+def save_config(data):
+    with open(CONFIG_JSON, 'w') as config_file:
+        json.dump(data, config_file, indent=2)
+
 # Check if All files exist, if not create them
-def files_prep():
+def initialize_assets():
     """
     Function to check if all necessary files exist.
     If a file does not exist, it will be created.
@@ -28,15 +50,22 @@ def files_prep():
                 f.close()  # Create an empty file
 
         # Connect to the SQLite database
-        conn = sqlite3.connect(USERS_DB)
-        cursor = conn.cursor()
+        conn, cursor = get_db_connection()
 
         # Create the users table if it doesn't exist
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (id INTEGER,
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
                 username TEXT NOT NULL UNIQUE,
                 email TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL)
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Folders (
+                id INTEGER,
+                FolderName TEXT NOT NULL,
+                FolderPath TEXT NOT NULL)
         ''')
 
         conn.commit()
@@ -106,8 +135,7 @@ def Sign_in(username, password):
             bool: True if the user was found and signed in successfully, False otherwise.
 
     """
-    conn = sqlite3.connect(USERS_DB)
-    cursor = conn.cursor()
+    conn, cursor = get_db_connection()
     # Check if the user exists in the database
     cursor.execute(
         "SELECT * FROM users WHERE username = ? and password = ?", (username, password)
@@ -116,6 +144,15 @@ def Sign_in(username, password):
     User_values = cursor.fetchone()
 
     if User_values is not None:
+        cursor.execute(
+            "SELECT * FROM Folders WHERE id = ?", (User_values[0],)
+        )
+
+        folders = cursor.fetchall()
+        folders_list = [{
+            "name": folder[1],
+            "path": folder[2]
+        } for folder in folders]
 
         # add to config.json
         with open(CONFIG_JSON, 'w') as config_file:
@@ -125,9 +162,9 @@ def Sign_in(username, password):
                 "email": User_values[2],
                 "password": password,
                 "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "folders": folders_list
             }, config_file, indent=2)
 
-        print(f"Welcome back, {username}!")
         logging.info(f"User {username} signed in successfully.")
         conn.close()
         return True
@@ -150,8 +187,7 @@ def Sign_up(useNam, useEm, usePass):
     """
 
     # Connect to the SQLite database
-    conn = sqlite3.connect(USERS_DB)
-    cursor = conn.cursor()
+    conn, cursor = get_db_connection()
     # Check if the user already exists
     cursor.execute(
         "SELECT * FROM users WHERE username = ? and email = ? and password = ?", (useNam, useEm, usePass)
@@ -197,6 +233,7 @@ def Sign_up(useNam, useEm, usePass):
                     "email": useEm,
                     "password": usePass,
                     "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "folders": []
                 },
                 indent=2
             ))
@@ -205,49 +242,193 @@ def Sign_up(useNam, useEm, usePass):
         logging.info(f"User {useNam} created successfully.")
         return True
 
+def User_not_found():
+    """
+    Function to handle the case when a user is not found.
+    This function prompts the user to sign up or sign in.
+    """
+    print("User not found. Please sign up or sign in.")
+    while True:
+        # Ask the user if they want to sign up or sign in
+        choice = input("Do you want to sign up or sign in? (sign up/sign in): ").strip().lower()
+        if choice == 'sign up':
+            while True:
+                username, Email, password = Getting_user_input(True, True, True)
+                if Sign_up(username, Email, password):
+                    break
+            break
+        elif choice == 'sign in':
+            while True:
+                username, _, password = Getting_user_input(True, False, True)
+                if Sign_in(username, password):
+                    break
+            break
+        else:
+            print("Invalid choice. Please try again.")
+
+def select_folder():
+    """
+    Opens a GUI interface to allow the user to select a folder.
+    Returns the selected folder path as a string.
+    """
+    # Initialize the Tkinter root window
+    root = tk.Tk()
+    root.withdraw()  # Hide the root window
+
+    # Force the dialog to appear on top
+    root.attributes('-topmost', True)
+
+    # Open the folder selection dialog
+    folder_path = askdirectory(title="Select a folder", initialdir=os.getcwd(), mustexist=True)
+    
+    # Destroy the root window after selection
+    root.destroy()
+
+    if folder_path:
+        return folder_path
+    else:
+        print("Please select a folder to continue.")
+        return None
+
+def save_folder(folder_path, folder_name):
+    """
+    Saves the selected folder path and name to database & the config.json file.
+
+    Args:
+        folder_path (str): The path of the selected folder.
+        folder_name (str): The name of the selected folder.
+    """    
+
+    conn, cursor = get_db_connection()
+    config_data = load_config()
+    # Check if the folder already exists in the database
+    cursor.execute("SELECT * FROM Folders WHERE FolderPath = ?", (folder_path,))
+    if cursor.fetchone() is not None:
+        logging.warning(f"Folder {folder_path} already exists in the database.")
+        print(f"Folder {folder_path} already exists. Please select a different folder.")
+        return select_folder()
+    else:
+        cursor.execute("INSERT INTO Folders VALUES (?, ?, ?)", 
+                    (config_data["user_id"], os.path.basename(folder_path), folder_path))
+
+        logging.info(f"Folder {folder_path} selected and saved to database.")
+        conn.commit()
+        conn.close()
+
+    # Ensure folders key exists
+    if "folders" not in config_data:
+        config_data["folders"] = []
+
+    # Append new folder information
+    config_data["folders"].append({
+        "name": folder_name,
+        "path": folder_path
+    })
+
+    save_config(config_data)
+
+
+def select_file(path):
+    """
+    Opens a GUI interface to allow the user to select a file.
+    Returns the selected file path as a string.
+    """
+    # Initialize the Tkinter root window
+    root = tk.Tk()
+    root.withdraw()  # Hide the root window
+
+    # Force the dialog to appear on top
+    root.attributes('-topmost', True)
+
+    # Open the file selection dialog
+    file_path = askopenfilename(title="Select a file", initialdir=path)
+
+    # Destroy the root window after selection
+    root.destroy()
+
+    return file_path
+
 def main():
     """
     Main function to handle the core logic of the application.
     """
 
-    if not files_prep():
-        print("Hello, welcome to Encrypto!")
-        username, Email, password = Getting_user_input(True, True, True)
+    if not initialize_assets():
+        print("welcome to Encrypto!")
         while True:
+            username, Email, password = Getting_user_input(True, True, True)
             if Sign_up(username, Email, password):
                 break
-    else:  
-        with open(CONFIG_JSON, 'r') as config_file:
-            config_data = json.load(config_file)
 
-        conn = sqlite3.connect(USERS_DB)
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT * FROM users WHERE id = ? and username = ? and email = ? and password = ?", 
-                (config_data["user_id"], config_data["username"], config_data["email"], config_data["password"]))
-        if cursor.fetchone() is not None:
-            print(f"Welcome back, {config_data['username']}!")
-        else:
-            print("User not found. Please sign up or Sign in.")
-            while True:
-                # Ask the user if they want to sign up or sign in
-                choice = input("Do you want to sign up or sign in? (sign up/sign in): ").strip().lower()
-                if choice == 'sign up':
-                    username, Email, password = Getting_user_input(True, True, True)
+        print("Please, select a folder.")
+        while True:
+            folder = select_folder()
+            if folder:
+                print(f"Selected folder: {folder}")
+                # Save the folder to the database and config.json
+                save_folder(folder, os.path.basename(folder))
+                break
+            else:
+                print("No folder selected. Please try again.")
+
+        # for file in enumerate(os.listdir(folder), start=1):
+        #     print(f"Processing file {file[0]}: {file[1]}")
+
+        # print("Choose a file to encrypt.")
+        # selected_file = select_file(folder)
+        # if selected_file:
+        #     print(f"Selected file: {selected_file}")
+        # else:
+        #     print("No file selected.")
+        #     quit(1)
+
+    else:  
+        try:
+            with open(CONFIG_JSON, 'r') as config_file:
+                config_data = json.load(config_file)
+
+            conn, cursor = get_db_connection()
+            cursor.execute(
+                "SELECT * FROM users WHERE id = ? and username = ? and email = ? and password = ?", 
+                    (config_data["user_id"], config_data["username"], config_data["email"], config_data["password"]))
+            if cursor.fetchone() is not None:
+                print(f"Welcome back, {config_data['username']}!")
+                logging.info(f"User {config_data['username']} signed in successfully.")
+
+                choice = input("Do you want to select a folder or use an existing one or exit? (select/use/exit): ").strip().lower()
+                if choice == 'select':
+                    folder = select_folder()
+                    if folder:
+                        print(f"Selected folder: {folder}")
+                        save_folder(folder, os.path.basename(folder))
+                    else:
+                        print("No folder selected.")
+                        quit(1)
+                elif choice == 'use':
+                    config_data = load_config()
                     while True:
-                        if Sign_up(username, Email, password):
-                            break
-                    break
-                elif choice == 'sign in':
-                    username, _, password = Getting_user_input(True, False, True)
-                    while True:
-                        if Sign_in(username, password):
-                            break
-                    break
-                else:
-                    print("Invalid choice. Please try again.")
-            conn.close()
-            config_file.close()
+                        if "folders" in config_data:
+                            print("Please, select a folder.")
+                            for folder in enumerate(config_data["folders"], start=1):
+                                print(f"Processing folder {folder[0]}: {folder[1]["name"]}")
+                            folder_choice = input("Enter the name of the folder you want to use: ").strip()
+                            folder_path = next((f["path"] for f in config_data["folders"] if f["name"] == folder_choice), None)
+                        else:
+                            select_folder()
+                elif choice == 'exit':
+                    print("Exiting the application.")
+                    quit(0)
+
+            else:
+                print("User not found. Please sign up or Sign in.")
+                User_not_found()
+                main()
+
+        except json.JSONDecodeError as e:
+            print("Error reading config file. Please sign up again.")
+            logging.error(f"JSON decode error")
+            User_not_found()
+            main()
 
 
 if __name__ == "__main__":
