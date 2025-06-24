@@ -5,18 +5,13 @@ import json
 import random
 import re
 import crypt
+import time
+import sys
+from tqdm import tqdm
 from datetime import datetime
 import tkinter as tk
 from tkinter.filedialog import askdirectory, askopenfilename
 from typing import Tuple, List, Dict, Optional, Any
-from helper_functions import print_llm_response # type: ignore
-print_llm_response("Hello")
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ASSETS_DIR = os.path.join(BASE_DIR, "Assets")
-USERS_DB = os.path.join(ASSETS_DIR, "users.db")
-CONFIG_JSON = os.path.join(ASSETS_DIR, "config.json")
-LOGS_LOG = os.path.join(ASSETS_DIR, "logs.log")
 
 def get_db_connection() -> Tuple[sqlite3.Connection, sqlite3.Cursor]:
     conn = sqlite3.connect(USERS_DB)
@@ -30,50 +25,6 @@ def load_config() -> Dict[str, Any]:
 def save_config(data: Dict[str, Any]) -> None:
     with open(CONFIG_JSON, 'w') as config_file:
         json.dump(data, config_file, indent=2)
-
-def initialize_assets() -> bool:
-    """
-    Function to check if all necessary files exist.
-    If a file does not exist, it will be created.
-    """
-    if not os.path.exists(ASSETS_DIR):
-        os.makedirs(ASSETS_DIR, exist_ok=True)
-
-    files = [USERS_DB, CONFIG_JSON, LOGS_LOG]
-
-    if all([os.path.exists(file) for file in files]):
-        return True
-    else:
-        for file in files:
-            with open(file, 'a') as f:
-                f.close()
-
-        conn, cursor = get_db_connection()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY,
-                username TEXT NOT NULL UNIQUE,
-                email TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL)
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS Folders (
-                id INTEGER,
-                FolderName TEXT NOT NULL,
-                FolderPath TEXT NOT NULL)
-        ''')
-        conn.commit()
-        conn.close()
-
-        logging.basicConfig(
-            filename=LOGS_LOG,
-            filemode='a',
-            level=logging.INFO,
-            datefmt='%Y-%m-%d %H:%M:%S',
-            format='%(asctime)s - %(levelname)s- %(message)s'
-        )
-        logging.info("Files have been created.")
-        return False
 
 def Getting_user_input(username: bool = False, Email: bool = False, password: bool = False) -> List[str]:
     """
@@ -91,7 +42,7 @@ def Getting_user_input(username: bool = False, Email: bool = False, password: bo
         if not Email:
             break
         Email = input("Enter your email: ").strip()
-        if re.match(r"[^@]+@[^@]+\.[^@]+", Email):
+        if re.match(r"^[A-z0-9\.]{3,}@[A-z0-9]+\.(com|net|org|info)$", Email):
             break
         else:
             print("Invalid email format. Please try again.")
@@ -189,6 +140,17 @@ def Sign_up(useNam: str, useEm: str, usePass: str) -> bool:
             ))
         print("User created successfully!")
         logging.info(f"User {useNam} created successfully.")
+
+        print("Please, select a folder.")
+        while True:
+            folder = select_folder()
+            if folder:
+                print(f"Selected folder: {folder}")
+                save_folder(folder, os.path.basename(folder))
+                break
+            else:
+                print("No folder selected. Please try again.")
+
         return True
 
 def User_not_found() -> None:
@@ -229,6 +191,21 @@ def select_folder() -> Optional[str]:
         print("Please select a folder to continue.")
         return None
 
+def progress_bar_1():
+    for i in tqdm(range(100)):
+        time.sleep(0.05) # Simulate some work
+
+def spinning_loader():
+    print("Loading...", end="")
+    spinner = ['-', '\\', '|', '/']
+    for _ in range(20):  # Animate for 20 frames
+        for char in spinner:
+            sys.stdout.write('\rLoading... ' + char)
+            sys.stdout.flush()
+            time.sleep(0.1)
+    sys.stdout.write('\rLoading... Done!   \n') # Clear the spinner and add "Done!"
+    sys.stdout.flush()
+
 def save_folder(folder_path: str, folder_name: str) -> Optional[str]:
     """
     Saves the selected folder path and name to database & the config.json file.
@@ -236,7 +213,7 @@ def save_folder(folder_path: str, folder_name: str) -> Optional[str]:
     try:
         conn, cursor = get_db_connection()
         config_data = load_config()
-        cursor.execute("SELECT * FROM Folders WHERE FolderPath = ?", (folder_path,))
+        cursor.execute("SELECT * FROM Folders WHERE FolderPath = ? and UserID = ?", (folder_path, config_data["user_id"]))
         if cursor.fetchone() is not None:
             logging.warning(f"Folder {folder_path} already exists in the database.")
             print(f"Folder {folder_path} already exists. Please select a different folder.")
@@ -262,7 +239,6 @@ def save_folder(folder_path: str, folder_name: str) -> Optional[str]:
         logging.error(f"SQLite error: {e}")
         print("An error occurred while accessing the database. Please try again.")
         quit(0)
-    return None
 
 def select_file(path: str) -> Optional[str]:
     """
@@ -286,15 +262,6 @@ def main() -> None:
             username, Email, password = Getting_user_input(True, True, True)
             if Sign_up(username, Email, password):
                 break
-        print("Please, select a folder.")
-        while True:
-            folder = select_folder()
-            if folder:
-                print(f"Selected folder: {folder}")
-                save_folder(folder, os.path.basename(folder))
-                break
-            else:
-                print("No folder selected. Please try again.")
     else:  
         try:
             with open(CONFIG_JSON, 'r') as config_file:
@@ -304,7 +271,7 @@ def main() -> None:
                 "SELECT * FROM users WHERE id = ? and username = ? and email = ? and password = ?", 
                     (config_data["user_id"], config_data["username"], config_data["email"], config_data["password"]))
             if cursor.fetchone() is not None:
-                print(f"Welcome back, {config_data['username']}!")
+                print(f"Welcome, {config_data['username']}!")
                 logging.info(f"User {config_data['username']} signed in successfully.")
                 choice = input("Do you want to select a folder or use an existing one or exit? (select/use/exit): ").strip().lower()
                 if choice == 'select':
@@ -316,17 +283,25 @@ def main() -> None:
                         print("No folder selected.")
                         quit(1)
                 elif choice == 'use':
-                    pass
-                    # config_data = load_config()
-                    # while True:
-                    #     if "folders" in config_data:
-                    #         print("Please, select a folder.")
-                    #         for folder in enumerate(config_data["folders"], start=1):
-                    #             print(f"Processing folder {folder[0]}: {folder[1]['name']}")
-                    #         folder_choice = input("Enter the name of the folder you want to use: ").strip()
-                    #         # folder_path = next((f["path"] for f in config_data["folders"] if f["name"] == folder_choice), None)
-                    #     else:
-                    #         select_folder()
+                    config_data = load_config()
+                    while True:
+                        if "folders" in config_data:
+                            print("Please, select a folder.")
+                            for folder in enumerate(config_data["folders"], start=1):
+                                print(f"folder {folder[0]}: {folder[1]['name']}")
+                            folder_choice = input("Enter the name of the folder you want to use: ").strip()
+                            print("Processing your folder...")
+                            progress_bar_1()
+                            break
+                        else:
+                            select_folder()
+
+                    folder_path = next((f["path"] for f in config_data["folders"] if f["name"] == folder_choice), None)
+                    if folder_path is not None:
+                        print(f"Using folder: {folder_path}")
+                        spinning_loader()
+                        for file in os.listdir(folder_path):
+                            print(f"Processed file: {file}")
                 elif choice == 'exit':
                     print("Exiting the application.")
                     quit(0)
@@ -341,4 +316,54 @@ def main() -> None:
             main()
 
 if __name__ == "__main__":
+
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    ASSETS_DIR = os.path.join(BASE_DIR, "Assets")
+    USERS_DB = os.path.join(ASSETS_DIR, "users.db")
+    CONFIG_JSON = os.path.join(ASSETS_DIR, "config.json")
+    LOGS_LOG = os.path.join(ASSETS_DIR, "logs.log")
+
+    def initialize_assets() -> bool:
+        """
+        Function to check if all necessary files exist.
+        If a file does not exist, it will be created.
+        """
+        if not os.path.exists(ASSETS_DIR):
+            os.makedirs(ASSETS_DIR, exist_ok=True)
+
+        files = [USERS_DB, CONFIG_JSON, LOGS_LOG]
+
+        if all([os.path.exists(file) for file in files]):
+            return True
+        else:
+            for file in files:
+                with open(file, 'a') as f:
+                    f.close()
+
+            conn, cursor = get_db_connection()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY,
+                    username TEXT NOT NULL UNIQUE,
+                    email TEXT NOT NULL UNIQUE,
+                    password TEXT NOT NULL)
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS Folders (
+                    UserID INTEGER,
+                    FolderName TEXT NOT NULL,
+                    FolderPath TEXT NOT NULL)
+            ''')
+            conn.commit()
+            conn.close()
+
+            logging.basicConfig(
+                filename=LOGS_LOG,
+                filemode='a',
+                level=logging.INFO,
+                datefmt='%Y-%m-%d %H:%M:%S',
+                format='%(asctime)s - %(levelname)s- %(message)s'
+            )
+            logging.info("Files have been created.")
+            return False
     main()
