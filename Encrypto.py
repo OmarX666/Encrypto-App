@@ -191,16 +191,12 @@ def select_folder() -> Optional[str]:
         print("Please select a folder to continue.")
         return None
 
-def progress_bar_1():
-    for i in tqdm(range(100)):
-        time.sleep(0.05) # Simulate some work
-
-def spinning_loader():
-    print("Loading...", end="")
+def spinning_loader(count):
+    print("Loading Files...", end="")
     spinner = ['-', '\\', '|', '/']
-    for _ in range(20):  # Animate for 20 frames
+    for _ in range(count):  # Animate for 20 frames
         for char in spinner:
-            sys.stdout.write('\rLoading... ' + char)
+            sys.stdout.write('\rLoading Files... ' + char)
             sys.stdout.flush()
             time.sleep(0.1)
     sys.stdout.write('\rLoading... Done!   \n') # Clear the spinner and add "Done!"
@@ -284,24 +280,39 @@ def main() -> None:
                         quit(1)
                 elif choice == 'use':
                     config_data = load_config()
+
+                    # Selecting a folder
+                    print("Please, select a folder.")
                     while True:
                         if "folders" in config_data:
-                            print("Please, select a folder.")
                             for folder in enumerate(config_data["folders"], start=1):
                                 print(f"folder {folder[0]}: {folder[1]['name']}")
-                            folder_choice = input("Enter the name of the folder you want to use: ").strip()
-                            print("Processing your folder...")
-                            progress_bar_1()
-                            break
+                            folder_choice = input("Enter the name of the folder you want to use: ").strip().lower()
+                            folder_path = next((f["path"] for f in config_data["folders"] if f["name"].lower() == folder_choice), None)
+                            if folder_path is not None:
+                                break
+                            else:
+                                print("Please select a valid folder.")
                         else:
                             select_folder()
 
-                    folder_path = next((f["path"] for f in config_data["folders"] if f["name"] == folder_choice), None)
-                    if folder_path is not None:
-                        print(f"Using folder: {folder_path}")
-                        spinning_loader()
-                        for file in os.listdir(folder_path):
-                            print(f"Processed file: {file}")
+                    # Selecting a file
+                    print(f"Using folder: {folder_path}")
+                    Files_list = os.listdir(folder_path)
+                    spinning_loader(len(Files_list))
+                    for file in enumerate(Files_list, start=1):
+                        print(f"File {file[0]} {file[1]}")
+
+                    while True:
+                        file_choice = int(input("Enter the number of the folder you want to use: ").strip())
+                        try:
+                            print(Files_list[file_choice - 1])
+                            break
+                        except:
+                            print("Please select a valid file number.")
+
+                    # Sending the file
+
                 elif choice == 'exit':
                     print("Exiting the application.")
                     quit(0)
@@ -309,8 +320,9 @@ def main() -> None:
                 print("User not found. Please sign up or Sign in.")
                 User_not_found()
                 main()
+            conn.close()
         except json.JSONDecodeError as e:
-            print("Error reading config file. Please sign up again.")
+            print("Error reading config file.")
             logging.error(f"JSON decode error: {e}")
             User_not_found()
             main()
