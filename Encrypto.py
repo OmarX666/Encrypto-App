@@ -91,6 +91,17 @@ def Sign_in(username: str, password: str) -> bool:
     else:
         print("Invalid username or password. Please try again.")
         return False
+    
+def Id_Gen():
+    conn, cursor = get_db_connection()
+    while True:
+        id = random.random().as_integer_ratio()[random.randint(0, 1)]
+        cursor.execute("SELECT * FROM users WHERE id = ?", (id,))
+        if cursor.fetchone() is None:
+            break
+
+    conn.close()
+    return id
 
 def Sign_up(useNam: str, useEm: str, usePass: str) -> bool:
     """
@@ -116,11 +127,7 @@ def Sign_up(useNam: str, useEm: str, usePass: str) -> bool:
             conn.close()
             return False
     else:
-        while True:
-            random_id = random.random().as_integer_ratio()[random.randint(0, 1)]
-            cursor.execute("SELECT * FROM users WHERE id = ?", (random_id,))
-            if cursor.fetchone() is None:
-                break
+        random_id = Id_Gen()
         cursor.execute(
             "INSERT INTO users VALUES (?, ?, ?, ?)", (random_id, useNam, useEm, usePass)
         )
