@@ -1,6 +1,6 @@
 import os, logging, sqlite3
 import json, random, re
-import time, sys
+import time, sys, crypt
 from datetime import datetime
 import tkinter as tk
 from tkinter.filedialog import askdirectory, askopenfilename
@@ -179,20 +179,20 @@ class FolderManager:
             quit(0)
         return None
 
-    def select_file(self, path: str) -> Optional[str]:
+    def select_file(self, f_path: str) -> Optional[str]:
         root = tk.Tk()
         root.withdraw()
         root.attributes('-topmost', True)
-        file_path = askopenfilename(title="Select a file", initialdir=path)
+        file_path = askopenfilename(title="Select a file", initialdir=f_path)
         root.destroy()
         return file_path
 
-    def spinning_loader(self, count: int) -> None:
-        print("Loading Files...", end="")
+    def spinning_loader(self, count: int, text: str = "Loading...") -> None:
+        print(text, end="")
         spinner = ['-', '\\', '|', '/']
         for _ in range(count):
             for char in spinner:
-                sys.stdout.write('\rLoading Files... ' + char)
+                sys.stdout.write('\r' + text + ' ' + char)
                 sys.stdout.flush()
                 time.sleep(0.1)
         sys.stdout.write('\rLoading... Done!   \n')
@@ -305,9 +305,9 @@ class EncryptoApp:
                     elif choice == 'use':
 
                         # Selecting a folder
-                        print("Please, select a folder.")
                         while True:
                             if "folders" in config_data:
+                                self.folder_manager.spinning_loader(len(config_data["folders"]))
                                 for folder in enumerate(config_data["folders"], start=1):
                                     print(f"folder {folder[0]}: {folder[1]['name']}")
                                 folder_choice = input("Enter the name of the folder you want to use: ").strip().lower()
@@ -319,22 +319,44 @@ class EncryptoApp:
                             else:
                                 self.folder_manager.select_folder()
 
-                        # Selecting a file
-                        print(f"Using folder: {folder_path}")
-                        Files_list = os.listdir(folder_path)
-                        self.folder_manager.spinning_loader(len(Files_list))
-                        for file in enumerate(Files_list, start=1):
-                            print(f"File {file[0]} {file[1]}")
-
                         while True:
-                            file_choice = int(input("Enter the number of the folder you want to use: ").strip())
-                            try:
-                                print(Files_list[file_choice - 1])
-                                break
-                            except:
-                                print("Please select a valid file number.")
+                            Treat_type = input("Do you want to use multi files or single file? (multi/single): ").strip().lower()
+                            Operation = input("Do you want to \n 1- Encrypt \n 2- Decrtypt \n: ").strip().lower()
 
-                        # Sending the file
+                            if Treat_type not in ["multi", "single"] and Operation not in ["1", "2"]:
+                                print("Invalid choice. Please choose 'multi' or 'single'.")
+                                continue
+                            else:
+                                break
+
+                        if Treat_type == "multi":
+                            if Operation == "1":
+                                for file in os.listdir(folder_path):
+                                    if os.path.isfile(folder_path + "/" + file):
+                                        crypt.Encryption(folder_path + "/" + file).ceaser_encrypt()
+                            elif Operation == "2":
+                                suffix = input("Enter the suffix for the decrypted file (default: .text): ") or ".text"
+                                for file in os.listdir(folder_path + "/Encrypted"):
+                                    if os.path.isfile(folder_path + "/Encrypted/" + file):
+                                        crypt.Decryption(folder_path + "/Encrypted/" + file, suffix).ceaser_decrypt()
+                            else:
+                                print("Not a valid type")
+
+                        elif Treat_type == 'single':
+                            # Selecting a file
+                            while True:
+                                file_path = self.folder_manager.select_file(folder_path)
+                                if file_path is not None:
+                                    break
+
+                            if Operation == "1":
+                                crypt.Encryption(file_path).ceaser_encrypt()
+
+                            elif Operation == "2":
+                                crypt.Decryption(file_path, input(
+                                    "Enter the suffix for the decrypted file (default: .text): ") or ".text").ceaser_decrypt()
+                            else:
+                                print("Not a valid type")
 
                     elif choice == 'exit':
                         print("Exiting the application.")
