@@ -5,7 +5,6 @@ from datetime import datetime
 import tkinter as tk
 from tkinter.filedialog import askdirectory, askopenfilename
 from typing import Tuple, List, Dict, Optional, Any
-
 class DatabaseManager:
     def __init__(self, db_path: str):
         self.db_path = db_path
@@ -15,23 +14,30 @@ class DatabaseManager:
         return conn, conn.cursor()
 
     def initialize(self) -> None:
-        conn, cursor = self.get_connection()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY,
-                username TEXT NOT NULL UNIQUE,
-                email TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL)
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS Folders (
-                UserID INTEGER,
-                FolderName TEXT NOT NULL,
-                FolderPath TEXT NOT NULL)
-        ''')
-        conn.commit()
-        conn.close()
+        try:
+            conn, cursor = self.get_connection()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY,
+                    username TEXT NOT NULL UNIQUE,
+                    email TEXT NOT NULL UNIQUE,
+                    password TEXT NOT NULL)
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS Folders (
+                    UserID INTEGER,
+                    FolderName TEXT NOT NULL,
+                    FolderPath TEXT NOT NULL)
+            ''')
 
+        except:
+            print("Database Doesn't Exist.")
+            app.initialize_assets()
+
+        finally:
+            if conn:
+                conn.commit()
+                conn.close()
 class ConfigManager:
     def __init__(self, config_path: str):
         self.config_path = config_path
@@ -64,18 +70,20 @@ class UserManager:
     def sign_up(self, username: str, email: str, password: str) -> bool:
         conn, cursor = self.db_manager.get_connection()
         cursor.execute(
-            "SELECT * FROM users WHERE username = ? and email = ? and password = ?", (username, email, password)
-        )
+            "SELECT * FROM users WHERE username = ? and email = ? and password = ?", (username, email, password))
+
         if cursor.fetchone() is not None:
             print("User already exists. Please try a different username or email.")
             logging.warning(f"User {username} already exists.")
             choice = input("Do you want to sign in instead? (yes/no): ").strip().lower()
+
             if choice == 'yes':
                 print("Redirecting to sign-in...")
                 logging.info(f"User {username} chose to sign in instead.")
                 conn.close()
                 self.sign_in(username, password)
                 return True
+
             else:
                 print("Please try again with a different username or email.")
                 logging.info(f"User {username} chose to sign up again.")
@@ -84,8 +92,8 @@ class UserManager:
         else:
             user_id = self.id_gen()
             cursor.execute(
-                "INSERT INTO users VALUES (?, ?, ?, ?)", (user_id, username, email, password)
-            )
+                "INSERT INTO users VALUES (?, ?, ?, ?)", (user_id, username, email, password))
+
             conn.commit()
             conn.close()
             self.config_manager.save({
@@ -106,6 +114,7 @@ class UserManager:
             "SELECT * FROM users WHERE username = ? and password = ?", (username, password)
         )
         user_values = cursor.fetchone()
+
         if user_values is not None:
             cursor.execute(
                 "SELECT * FROM Folders WHERE UserID = ?", (user_values[0],)
@@ -115,6 +124,7 @@ class UserManager:
                 "name": folder[1],
                 "path": folder[2]
             } for folder in folders]
+
             self.config_manager.save({
                 "user_id": user_values[0],
                 "username": username,
@@ -126,10 +136,10 @@ class UserManager:
             logging.info(f"User {username} signed in successfully.")
             conn.close()
             return True
+
         else:
             print("Invalid username or password. Please try again.")
             return False
-
 class FolderManager:
     def __init__(self, db_manager: DatabaseManager, config_manager: ConfigManager):
         self.db_manager = db_manager
@@ -141,11 +151,11 @@ class FolderManager:
         root.attributes('-topmost', True)
         folder_path = askdirectory(title="Select a folder", initialdir=os.getcwd(), mustexist=True)
         root.destroy()
+
         if folder_path:
             return self.save_folder(folder_path, os.path.basename(folder_path), self.config_manager.load()["user_id"])
         else:
-            print("Please select a folder to continue.")
-            return None
+            print("Please select a folder to continue."); return None
 
     def save_folder(self, folder_path: str, folder_name: str, user_id: int) -> Optional[str]:
         try:
@@ -156,12 +166,12 @@ class FolderManager:
                 logging.warning(f"Folder {folder_path} already exists in the database.")
                 print(f"Folder {folder_path} already exists. Please select a different folder.")
                 return self.select_folder()
+
             else:
                 cursor.execute("INSERT INTO Folders VALUES (?, ?, ?)", 
                             (user_id, folder_name, folder_path))
                 logging.info(f"Folder {folder_path} selected and saved to database.")
-                conn.commit()
-                conn.close()
+
             if "folders" not in config_data:
                 config_data["folders"] = []
             config_data["folders"].append({
@@ -169,15 +179,21 @@ class FolderManager:
                 "path": folder_path
             })
             self.config_manager.save(config_data)
+
         except Exception:
             logging.error("Error saving folder to database or config.json.")
             print("An error occurred while saving the folder. Please try again.")
             return self.select_folder()
+
         except sqlite3.Error as e:
             logging.error(f"SQLite error: {e}")
             print("An error occurred while accessing the database. Please try again.")
             quit(0)
-        return None
+
+        finally:
+            conn.commit()
+            conn.close()
+            return None
 
     def select_file(self, f_path: str) -> Optional[str]:
         root = tk.Tk()
@@ -232,29 +248,22 @@ class EncryptoApp:
 
     def get_user_input(self, username: bool = False, email: bool = False, password: bool = False) -> List[str]:
         while True:
-            if not username: 
-                break
+            if not username: break
             if len(username := input("Enter your username: ").strip()) >= 3 and len(username) <= 20:
                 break
             else:
                 print("Invalid username format. Please use 3-20 alphanumeric characters or underscores.")
 
         while True:
-            if not email:
-                break
+            if not email: break
             email = input("Enter your email: ").strip()
-            if re.match(r"^[A-z0-9\.]{3,}@[A-z0-9]+\.(com|net|org|info)$", email):
-                break
-            else:
-                print("Invalid email format. Please try again.")
+            if re.match(r"^[A-z0-9\.]{3,}@[A-z0-9]+\.(com|net|org|info)$", email): break
+            else: print("Invalid email format. Please try again.")
 
         while True:
-            if not password:
-                break
-            if len(password := input("Enter your password: ").strip()) >= 8:
-                break
-            else:
-                print("Password must be at least 8 characters long. Please try again.")
+            if not password: break
+            if len(password := input("Enter your password: ").strip()) >= 8: break
+            else: print("Password must be at least 8 characters long. Please try again.")
 
         return [username, email, password]
 
@@ -276,6 +285,7 @@ class EncryptoApp:
             else:
                 print("Invalid choice. Please try again.")
 
+    # Main funciton
     def run(self) -> None:
         if not self.initialize_assets():
             print("welcome to Encrypto!")
@@ -295,10 +305,12 @@ class EncryptoApp:
                 cursor.execute(
                     "SELECT * FROM users WHERE id = ? and username = ? and email = ? and password = ?", 
                         (config_data["user_id"], config_data["username"], config_data["email"], config_data["password"]))
+
                 if cursor.fetchone() is not None:
                     print(f"Welcome, {config_data['username']}!")
                     logging.info(f"User {config_data['username']} signed in successfully.")
                     choice = input("Do you want to select a folder or use an existing one or exit? (select/use/exit): ").strip().lower()
+
                     if choice == 'select':
                         folder = self.folder_manager.select_folder()
                         quit(1)
@@ -312,10 +324,9 @@ class EncryptoApp:
                                     print(f"folder {folder[0]}: {folder[1]['name']}")
                                 folder_choice = input("Enter the name of the folder you want to use: ").strip().lower()
                                 folder_path = next((f["path"] for f in config_data["folders"] if f["name"].lower() == folder_choice), None)
-                                if folder_path is not None:
-                                    break
-                                else:
-                                    print("Please select a valid folder.")
+
+                                if folder_path is not None: break
+                                else: print("Please select a valid folder.")
                             else:
                                 self.folder_manager.select_folder()
 
@@ -326,16 +337,16 @@ class EncryptoApp:
                             if Treat_type not in ["multi", "single"] and Operation not in ["1", "2"]:
                                 print("Invalid choice. Please choose 'multi' or 'single'.")
                                 continue
-                            else:
-                                break
+                            else: break
 
                         if Treat_type == "multi":
                             if Operation == "1":
                                 for file in os.listdir(folder_path):
                                     if os.path.isfile(folder_path + "/" + file):
                                         crypt.Encryption(folder_path + "/" + file).ceaser_encrypt()
+
                             elif Operation == "2":
-                                suffix = input("Enter the suffix for the decrypted file (default: .text): ") or ".text"
+                                suffix = input("Enter the suffix for the decrypted file (default: text): ") or "text"
                                 for file in os.listdir(folder_path + "/Encrypted"):
                                     if os.path.isfile(folder_path + "/Encrypted/" + file):
                                         crypt.Decryption(folder_path + "/Encrypted/" + file, suffix).ceaser_decrypt()
@@ -349,12 +360,11 @@ class EncryptoApp:
                                 if file_path is not None:
                                     break
 
-                            if Operation == "1":
-                                crypt.Encryption(file_path).ceaser_encrypt()
+                            if Operation == "1": crypt.Encryption(file_path).ceaser_encrypt()
 
                             elif Operation == "2":
                                 crypt.Decryption(file_path, input(
-                                    "Enter the suffix for the decrypted file (default: .text): ") or ".text").ceaser_decrypt()
+                                    "Enter the suffix for the decrypted file (default: text): ") or "text").ceaser_decrypt()
                             else:
                                 print("Not a valid type")
 
@@ -365,12 +375,14 @@ class EncryptoApp:
                     print("User not found. Please sign up or Sign in.")
                     self.user_not_found()
                     self.run()
-                conn.close()
+
             except json.JSONDecodeError as e:
                 print("Error reading config file.")
                 logging.error(f"JSON decode error: {e}")
                 self.user_not_found()
                 self.run()
+
+            finally: conn.close()
 
 if __name__ == "__main__":
 
