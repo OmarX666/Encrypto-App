@@ -23,6 +23,7 @@ class DatabaseManager:
                     email TEXT NOT NULL UNIQUE,
                     password TEXT NOT NULL)
             ''')
+
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS Folders (
                     UserID INTEGER,
@@ -44,13 +45,11 @@ class ConfigManager:
 
     def load(self) -> Dict[str, Any]:
         if os.path.exists(self.config_path):
-            with open(self.config_path, 'r') as config_file:
-                return json.load(config_file)
+            with open(self.config_path, 'r') as config_file: return json.load(config_file)
         return {}
 
     def save(self, data: Dict[str, Any]) -> None:
-        with open(self.config_path, 'w') as config_file:
-            json.dump(data, config_file, indent=2)
+        with open(self.config_path, 'w') as config_file: json.dump(data, config_file, indent=2)
 
 class UserManager:
     def __init__(self, db_manager: DatabaseManager, config_manager: ConfigManager):
@@ -62,8 +61,7 @@ class UserManager:
         while True:
             id = random.randint(1, 1000000)
             cursor.execute("SELECT * FROM users WHERE id = ?", (id,))
-            if cursor.fetchone() is None:
-                break
+            if cursor.fetchone() is None: break
         conn.close()
         return id
 
@@ -213,7 +211,6 @@ class FolderManager:
                 time.sleep(0.1)
         sys.stdout.write('\rLoading... Done!   \n')
         sys.stdout.flush()
-
 class EncryptoApp:
     def __init__(self):
         self.db_manager = DatabaseManager(USERS_DB)
@@ -228,8 +225,7 @@ class EncryptoApp:
             return False
 
         files = [USERS_DB, CONFIG_JSON, LOGS_LOG]
-        if all([os.path.exists(file) for file in files]):
-            return True
+        if all([os.path.exists(file) for file in files]): return True
         else:
             for file in files:
                 with open(file, 'a') as f:
@@ -249,10 +245,8 @@ class EncryptoApp:
     def get_user_input(self, username: bool = False, email: bool = False, password: bool = False) -> List[str]:
         while True:
             if not username: break
-            if len(username := input("Enter your username: ").strip()) >= 3 and len(username) <= 20:
-                break
-            else:
-                print("Invalid username format. Please use 3-20 alphanumeric characters or underscores.")
+            if len(username := input("Enter your username: ").strip()) >= 3 and len(username) <= 20: break
+            else: print("Invalid username format. Please use 3-20 alphanumeric characters or underscores.")
 
         while True:
             if not email: break
@@ -273,14 +267,12 @@ class EncryptoApp:
             if choice == 'sign up':
                 while True:
                     username, email, password = self.get_user_input(True, True, True)
-                    if self.user_manager.sign_up(username, email, password):
-                        break
+                    if self.user_manager.sign_up(username, email, password): break
                 break
             elif choice == 'sign in':
                 while True:
                     username, _, password = self.get_user_input(True, False, True)
-                    if self.user_manager.sign_in(username, password):
-                        break
+                    if self.user_manager.sign_in(username, password): break
                 break
             else:
                 print("Invalid choice. Please try again.")
@@ -291,8 +283,7 @@ class EncryptoApp:
             print("welcome to Encrypto!")
             while True:
                 username, Email, password = self.get_user_input(True, True, True)
-                if self.user_manager.sign_up(username, Email, password):
-                    break
+                if self.user_manager.sign_up(username, Email, password): break
 
             config_data = self.config_manager.load()
             print("Please, select a folder.")
@@ -314,8 +305,8 @@ class EncryptoApp:
                     if choice == 'select':
                         folder = self.folder_manager.select_folder()
                         quit(1)
-                    elif choice == 'use':
 
+                    elif choice == 'use':
                         # Selecting a folder
                         while True:
                             if "folders" in config_data:
@@ -335,15 +326,13 @@ class EncryptoApp:
                             Operation = input("Do you want to \n 1- Encrypt \n 2- Decrtypt \n: ").strip().lower()
 
                             if Treat_type not in ["multi", "single"] and Operation not in ["1", "2"]:
-                                print("Invalid choice. Please choose 'multi' or 'single'.")
-                                continue
+                                print("Invalid choice. Please try again."); continue
                             else: break
 
                         if Treat_type == "multi":
                             if Operation == "1":
                                 for file in os.listdir(folder_path):
-                                    if os.path.isfile(folder_path + "/" + file):
-                                        crypt.Encryption(folder_path + "/" + file).ceaser_encrypt()
+                                    if os.path.isfile(folder_path + "/" + file): crypt.Encryption(folder_path + "/" + file).ceaser_encrypt()
 
                             elif Operation == "2":
                                 suffix = input("Enter the suffix for the decrypted file (default: text): ") or "text"
@@ -357,8 +346,7 @@ class EncryptoApp:
                             # Selecting a file
                             while True:
                                 file_path = self.folder_manager.select_file(folder_path)
-                                if file_path is not None:
-                                    break
+                                if file_path is not None: break
 
                             if Operation == "1": crypt.Encryption(file_path).ceaser_encrypt()
 
